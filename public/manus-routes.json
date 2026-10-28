@@ -1,0 +1,8 @@
+{
+  "routes": [
+    { "path": "/", "title": "Project Timeless — Home" },
+    { "path": "/archive", "title": "Explore the Archive — Project Timeless" },
+    { "path": "/share", "title": "Share a Story — Project Timeless" },
+    { "path": "/ask", "title": "Ask the Archive — Project Timeless" }
+  ]
+}
