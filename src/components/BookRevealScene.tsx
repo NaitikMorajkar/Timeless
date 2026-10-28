@@ -378,6 +378,11 @@ export function BookRevealScene() {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7))
       renderer.setSize(width, height, false)
       camera.aspect = width / height
+      // Preserve horizontal room for the globe on portrait screens.
+      const horizontalFov = THREE.MathUtils.degToRad(48)
+      camera.fov = THREE.MathUtils.radToDeg(
+        2 * Math.atan(Math.tan(horizontalFov / 2) / Math.min(camera.aspect, 1.6)),
+      )
       camera.updateProjectionMatrix()
     }
     resize()
@@ -403,6 +408,7 @@ export function BookRevealScene() {
     const context = gsap.context(() => {
       const timeline = gsap.timeline({ paused: true })
       const globeTitle = section.querySelector<HTMLElement>('.book-reveal__globe-title')
+      const introCopy = section.querySelector<HTMLElement>('.book-reveal__copy')
       timeline
         .to(leftCover.rotation, { y: -1.16, duration: 1, ease: 'power2.inOut' }, 0)
         .to(rightCover.rotation, { y: 1.16, duration: 1, ease: 'power2.inOut' }, 0)
@@ -421,6 +427,8 @@ export function BookRevealScene() {
         timeline.to(object.rig.scale, { x: 1, y: 1, z: 1, duration: 0.44, ease: 'back.out(1.4)' }, startAt)
         timeline.to(object.trail.material, { opacity: index === 3 ? 0.68 : 0.48, duration: 0.42, ease: 'power2.out' }, startAt - 0.06)
       })
+
+      if (introCopy) timeline.to(introCopy, { autoAlpha: 0, y: -24, duration: 0.4, ease: 'power2.in' }, 1.02)
 
       timeline
         .to(archiveGroup.position, { z: -2.6, y: -1.05, duration: 0.95, ease: 'power2.inOut' }, 1.02)
