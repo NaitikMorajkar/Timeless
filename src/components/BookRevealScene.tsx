@@ -475,6 +475,8 @@ export function BookRevealScene() {
           scrub: window.innerWidth <= 680 ? 1.1 : 1,
           anticipatePin: 1,
           invalidateOnRefresh: true,
+          // Pin dimensions settle during refresh, after the window resize event.
+          onRefresh: resize,
         })
       }
     }, section)
