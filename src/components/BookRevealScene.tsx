@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import * as THREE from 'three'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -242,7 +242,7 @@ export function BookRevealScene() {
   const sectionRef = useRef<HTMLElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const section = sectionRef.current
     const canvas = canvasRef.current
     if (!section || !canvas) return
@@ -256,6 +256,8 @@ export function BookRevealScene() {
       section.dataset.webglFallback = 'true'
       return
     }
+
+    delete section.dataset.webglFallback
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(31, 1, 0.1, 100)
@@ -372,10 +374,15 @@ export function BookRevealScene() {
     const resize = () => {
       const bounds = section.getBoundingClientRect()
       const width = Math.max(320, bounds.width)
-      const height = Math.max(420, window.innerHeight)
+      const height = Math.max(1, bounds.height)
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7))
       renderer.setSize(width, height, false)
       camera.aspect = width / height
+      // Preserve horizontal room for the globe on portrait screens.
+      const horizontalFov = THREE.MathUtils.degToRad(48)
+      camera.fov = THREE.MathUtils.radToDeg(
+        2 * Math.atan(Math.tan(horizontalFov / 2) / Math.min(camera.aspect, 1.6)),
+      )
       camera.updateProjectionMatrix()
     }
     resize()
@@ -390,7 +397,6 @@ export function BookRevealScene() {
         object.visual.position.y = drift
         object.visual.rotation.z = prefersReducedMotion ? 0 : Math.sin(time * 0.00045 + object.floatPhase) * 0.035
       })
-      globe.group.rotation.y += prefersReducedMotion ? 0 : 0.0012
       finalRays.group.rotation.z += prefersReducedMotion ? 0 : 0.00012
       finalParticles.points.rotation.y += prefersReducedMotion ? 0 : 0.00022
       camera.lookAt(cameraTarget)
@@ -398,81 +404,91 @@ export function BookRevealScene() {
     }
     gsap.ticker.add(render)
 
-    const timeline = gsap.timeline({ paused: true })
-    const globeTitle = section.querySelector<HTMLElement>('.book-reveal__globe-title')
-    timeline
-      .to(leftCover.rotation, { y: -1.16, duration: 1, ease: 'power2.inOut' }, 0)
-      .to(rightCover.rotation, { y: 1.16, duration: 1, ease: 'power2.inOut' }, 0)
-      .to(stage.rotation, { x: -0.34, y: -0.08, duration: 1, ease: 'power2.inOut' }, 0)
-      .to(camera.position, { x: -0.18, y: 1.28, z: 4.65, duration: 1.15, ease: 'power2.inOut' }, 0)
-      .to(cameraTarget, { x: 0.2, y: 0.68, z: -0.48, duration: 1.1, ease: 'power2.inOut' }, 0)
-      .to(bookLight, { intensity: 3.4, duration: 0.58, ease: 'power2.out' }, 0.26)
-      .to(keyLight, { intensity: 1.75, duration: 0.7, ease: 'power2.out' }, 0.25)
-      .to(pageSheets.map((page) => page.rotation), { y: -0.65, duration: 0.38, stagger: 0.075, ease: 'power2.inOut' }, 0.36)
-      .to(pageSheets.map((page) => page.rotation), { y: 0.12, duration: 0.46, stagger: 0.08, ease: 'power2.inOut' }, 0.66)
+    // Capture both the timeline and pin so remounts restore their initial styles.
+    const context = gsap.context(() => {
+      const timeline = gsap.timeline({ paused: true })
+      const globeTitle = section.querySelector<HTMLElement>('.book-reveal__globe-title')
+      const introCopy = section.querySelector<HTMLElement>('.book-reveal__copy')
+      timeline
+        .to(leftCover.rotation, { y: -1.16, duration: 1, ease: 'power2.inOut' }, 0)
+        .to(rightCover.rotation, { y: 1.16, duration: 1, ease: 'power2.inOut' }, 0)
+        .to(stage.rotation, { x: -0.34, y: -0.08, duration: 1, ease: 'power2.inOut' }, 0)
+        .to(camera.position, { x: -0.18, y: 1.28, z: 4.65, duration: 1.15, ease: 'power2.inOut' }, 0)
+        .to(cameraTarget, { x: 0.2, y: 0.68, z: -0.48, duration: 1.1, ease: 'power2.inOut' }, 0)
+        .to(bookLight, { intensity: 3.4, duration: 0.58, ease: 'power2.out' }, 0.26)
+        .to(keyLight, { intensity: 1.75, duration: 0.7, ease: 'power2.out' }, 0.25)
+        .to(pageSheets.map((page) => page.rotation), { y: -0.65, duration: 0.38, stagger: 0.075, ease: 'power2.inOut' }, 0.36)
+        .to(pageSheets.map((page) => page.rotation), { y: 0.12, duration: 0.46, stagger: 0.08, ease: 'power2.inOut' }, 0.66)
 
-    memoryObjects.forEach((object, index) => {
-      const startAt = 0.48 + index * 0.1
-      timeline.to(object.rig.position, { x: object.end.x, y: object.end.y, z: object.end.z, duration: 0.48, ease: 'power2.out' }, startAt)
-      timeline.to(object.rig.rotation, { x: object.endRotation.x, y: object.endRotation.y, z: object.endRotation.z, duration: 0.5, ease: 'power2.out' }, startAt)
-      timeline.to(object.rig.scale, { x: 1, y: 1, z: 1, duration: 0.44, ease: 'back.out(1.4)' }, startAt)
-      timeline.to(object.trail.material, { opacity: index === 3 ? 0.68 : 0.48, duration: 0.42, ease: 'power2.out' }, startAt - 0.06)
+      memoryObjects.forEach((object, index) => {
+        const startAt = 0.48 + index * 0.1
+        timeline.to(object.rig.position, { x: object.end.x, y: object.end.y, z: object.end.z, duration: 0.48, ease: 'power2.out' }, startAt)
+        timeline.to(object.rig.rotation, { x: object.endRotation.x, y: object.endRotation.y, z: object.endRotation.z, duration: 0.5, ease: 'power2.out' }, startAt)
+        timeline.to(object.rig.scale, { x: 1, y: 1, z: 1, duration: 0.44, ease: 'back.out(1.4)' }, startAt)
+        timeline.to(object.trail.material, { opacity: index === 3 ? 0.68 : 0.48, duration: 0.42, ease: 'power2.out' }, startAt - 0.06)
+      })
+
+      if (introCopy) timeline.to(introCopy, { autoAlpha: 0, y: -24, duration: 0.4, ease: 'power2.in' }, 1.02)
+
+      timeline
+        .to(archiveGroup.position, { z: -2.6, y: -1.05, duration: 0.95, ease: 'power2.inOut' }, 1.02)
+        .to(archiveGroup.scale, { x: 0.56, y: 0.56, z: 0.56, duration: 0.95, ease: 'power2.inOut' }, 1.02)
+        .to(camera.position, { x: 0.12, y: 0.4, z: 5.15, duration: 1.08, ease: 'power2.inOut' }, 1.02)
+        .to(cameraTarget, { x: 0.35, y: 0.25, z: -0.72, duration: 1.08, ease: 'power2.inOut' }, 1.02)
+        .to(ambient, { intensity: 0.22, duration: 0.85, ease: 'power2.out' }, 1.02)
+        .to(keyLight, { intensity: 0.28, duration: 0.85, ease: 'power2.out' }, 1.02)
+        .to(bookLight, { intensity: 0.55, duration: 0.7, ease: 'power2.inOut' }, 1.02)
+        .to(globe.group.rotation, { y: Math.PI * 1.5, x: 0.16, duration: 2.32, ease: 'none' }, 1.16)
+        .to(globe.group.scale, { x: 1, y: 1, z: 1, duration: 1.05, ease: 'power3.out' }, 1.16)
+        .to(globe.material, { opacity: 0.38, duration: 0.82, ease: 'power2.out' }, 1.26)
+        .to(connectionMaterial, { opacity: 0.45, duration: 0.7, ease: 'power2.out' }, 1.2)
+        .to(globe.pointMaterial, { opacity: 0.9, duration: 0.72, ease: 'power2.out' }, 1.32)
+        .to(globe.nodeMaterial, { opacity: 0.96, duration: 0.68, ease: 'power2.out' }, 1.38)
+        .to(globeLight, { intensity: 2.4, duration: 0.9, ease: 'power2.out' }, 1.2)
+      if (globeTitle) timeline.to(globeTitle, { opacity: 1, y: 0, duration: 0.72, ease: 'power2.out' }, 1.6)
+
+      const finalTitle = section.querySelector<HTMLElement>('.book-reveal__final-title')
+      timeline
+        .to(camera.position, { x: 0.28, y: 0.24, z: 3.45, duration: 0.72, ease: 'power2.inOut' }, 1.95)
+        .to(cameraTarget, { x: 0.45, y: 0.2, z: -0.72, duration: 0.72, ease: 'power2.inOut' }, 1.95)
+        .to(globe.material, { opacity: 0.6, duration: 0.48, ease: 'power2.out' }, 2.02)
+        .to(globe.pointMaterial, { opacity: 1, duration: 0.4, ease: 'power2.out' }, 2.02)
+        .to(globe.nodeMaterial, { opacity: 1, duration: 0.4, ease: 'power2.out' }, 2.02)
+        .to(globeLight, { intensity: 3.8, duration: 0.44, ease: 'power2.out' }, 2.02)
+        .to(camera.position, { x: 0.1, y: 0.55, z: 6.25, duration: 1.0, ease: 'power2.inOut' }, 2.48)
+        .to(cameraTarget, { x: 0.18, y: 0.14, z: -0.7, duration: 1.0, ease: 'power2.inOut' }, 2.48)
+        .to(globeLight, { intensity: 2.15, duration: 0.82, ease: 'power2.inOut' }, 2.48)
+        .to(finalRays.material, { opacity: 0.18, duration: 0.62, ease: 'power2.out' }, 2.42)
+        .to(finalParticles.material, { opacity: 0.46, duration: 0.72, ease: 'power2.out' }, 2.42)
+      if (globeTitle) timeline.to(globeTitle, { opacity: 0, y: -12, duration: 0.46, ease: 'power2.in' }, 2.5)
+      if (finalTitle) timeline.to(finalTitle, { opacity: 1, y: 0, duration: 0.9, ease: 'power3.out' }, 2.72)
+
+      if (prefersReducedMotion) {
+        timeline.progress(1)
+      } else {
+        ScrollTrigger.create({
+          animation: timeline,
+          trigger: section,
+          start: 'top top',
+          end: () => `+=${window.innerWidth <= 680 ? 1800 : 2400}`,
+          pin: true,
+          scrub: window.innerWidth <= 680 ? 1.1 : 1,
+          anticipatePin: 1,
+          invalidateOnRefresh: true,
+          // Pin dimensions settle during refresh, after the window resize event.
+          onRefresh: resize,
+        })
+      }
+    }, section)
+
+    let disposed = false
+    void document.fonts.ready.then(() => {
+      if (!disposed) ScrollTrigger.refresh()
     })
 
-    timeline
-      .to(archiveGroup.position, { z: -2.6, y: -1.05, duration: 0.95, ease: 'power2.inOut' }, 1.02)
-      .to(archiveGroup.scale, { x: 0.56, y: 0.56, z: 0.56, duration: 0.95, ease: 'power2.inOut' }, 1.02)
-      .to(camera.position, { x: 0.12, y: 0.4, z: 5.15, duration: 1.08, ease: 'power2.inOut' }, 1.02)
-      .to(cameraTarget, { x: 0.35, y: 0.25, z: -0.72, duration: 1.08, ease: 'power2.inOut' }, 1.02)
-      .to(ambient, { intensity: 0.22, duration: 0.85, ease: 'power2.out' }, 1.02)
-      .to(keyLight, { intensity: 0.28, duration: 0.85, ease: 'power2.out' }, 1.02)
-      .to(bookLight, { intensity: 0.55, duration: 0.7, ease: 'power2.inOut' }, 1.02)
-      .to(globe.group.scale, { x: 1, y: 1, z: 1, duration: 1.05, ease: 'power3.out' }, 1.16)
-      .to(globe.material, { opacity: 0.38, duration: 0.82, ease: 'power2.out' }, 1.26)
-      .to(connectionMaterial, { opacity: 0.45, duration: 0.7, ease: 'power2.out' }, 1.2)
-      .to(globe.pointMaterial, { opacity: 0.9, duration: 0.72, ease: 'power2.out' }, 1.32)
-      .to(globe.nodeMaterial, { opacity: 0.96, duration: 0.68, ease: 'power2.out' }, 1.38)
-      .to(globeLight, { intensity: 2.4, duration: 0.9, ease: 'power2.out' }, 1.2)
-    if (globeTitle) timeline.to(globeTitle, { opacity: 1, y: 0, duration: 0.72, ease: 'power2.out' }, 1.6)
-
-    const finalTitle = section.querySelector<HTMLElement>('.book-reveal__final-title')
-    timeline
-      .to(camera.position, { x: 0.28, y: 0.24, z: 3.45, duration: 0.72, ease: 'power2.inOut' }, 1.95)
-      .to(cameraTarget, { x: 0.45, y: 0.2, z: -0.72, duration: 0.72, ease: 'power2.inOut' }, 1.95)
-      .to(globe.material, { opacity: 0.6, duration: 0.48, ease: 'power2.out' }, 2.02)
-      .to(globe.pointMaterial, { opacity: 1, duration: 0.4, ease: 'power2.out' }, 2.02)
-      .to(globe.nodeMaterial, { opacity: 1, duration: 0.4, ease: 'power2.out' }, 2.02)
-      .to(globeLight, { intensity: 3.8, duration: 0.44, ease: 'power2.out' }, 2.02)
-      .to(camera.position, { x: 0.1, y: 0.55, z: 6.25, duration: 1.0, ease: 'power2.inOut' }, 2.48)
-      .to(cameraTarget, { x: 0.18, y: 0.14, z: -0.7, duration: 1.0, ease: 'power2.inOut' }, 2.48)
-      .to(globeLight, { intensity: 2.15, duration: 0.82, ease: 'power2.inOut' }, 2.48)
-      .to(finalRays.material, { opacity: 0.18, duration: 0.62, ease: 'power2.out' }, 2.42)
-      .to(finalParticles.material, { opacity: 0.46, duration: 0.72, ease: 'power2.out' }, 2.42)
-    if (globeTitle) timeline.to(globeTitle, { opacity: 0, y: -12, duration: 0.46, ease: 'power2.in' }, 2.5)
-    if (finalTitle) timeline.to(finalTitle, { opacity: 1, y: 0, duration: 0.9, ease: 'power3.out' }, 2.72)
-
-    if (prefersReducedMotion) {
-      timeline.progress(1)
-    } else {
-      ScrollTrigger.create({
-        animation: timeline,
-        trigger: section,
-        start: 'top top',
-        end: () => `+=${window.innerWidth <= 680 ? 1800 : 2400}`,
-        pin: true,
-        scrub: window.innerWidth <= 680 ? 1.1 : 1,
-        anticipatePin: 1,
-        invalidateOnRefresh: true,
-      })
-    }
-
-    const context = gsap.context(() => undefined, section)
     return () => {
+      disposed = true
       context.revert()
-      ScrollTrigger.getAll().forEach((trigger) => {
-        if (trigger.trigger === section) trigger.kill()
-      })
-      timeline.kill()
       gsap.ticker.remove(render)
       window.removeEventListener('resize', resize)
       renderer.dispose()
@@ -487,7 +503,7 @@ export function BookRevealScene() {
   }, [])
 
   return (
-    <section ref={sectionRef} className="book-reveal-section" aria-labelledby="book-reveal-title">
+    <section id="memories" ref={sectionRef} className="book-reveal-section" aria-labelledby="book-reveal-title">
       <canvas ref={canvasRef} className="book-reveal-canvas" aria-hidden="true" />
       <div className="book-reveal__vignette" aria-hidden="true" />
       <div className="book-reveal__copy">
