@@ -90,7 +90,7 @@ function HomePage({ onNavigate }: HomePageProps) {
           <div className="hero__caption"><span className="caption-line" /> A future home for what is worth carrying forward</div>
         </div>
 
-        <a className="hero__scroll-cue" href="#featured" aria-label="Scroll to featured stories"><span>Scroll to explore</span><Icon name="arrow-down" size={16} /></a>
+        <a className="hero__scroll-cue" href="#memories" aria-label="Scroll to the animated memories and globe"><span>Scroll to explore</span><Icon name="arrow-down" size={16} /></a>
       </section>
 
       <BookRevealScene />
